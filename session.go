@@ -142,69 +142,69 @@ type SessionManager struct {
 	uidMap map[string]ISession
 }
 
-func (s2 *SessionManager) Init() {
-	s2.sidMap = make(map[string]ISession)
-	s2.uidMap = make(map[string]ISession)
+func (sm *SessionManager) Init() {
+	sm.sidMap = make(map[string]ISession)
+	sm.uidMap = make(map[string]ISession)
 }
 
-func (s2 *SessionManager) Add(s ISession) {
-	s2.lock.Lock()
-	defer s2.lock.Unlock()
-	if s2.sidMap[s.ID()] == nil {
-		s2.sidMap[s.ID()] = s
+func (sm *SessionManager) Add(s ISession) {
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+	if sm.sidMap[s.ID()] == nil {
+		sm.sidMap[s.ID()] = s
 	}
 	if s.UID() != 0 {
-		s2.Bind(s)
+		sm.Bind(s)
 	} else {
 		session := s.(*LocalSession)
-		session.bindNotify = func() { s2.Bind(s) }
+		session.bindNotify = func() { sm.Bind(s) }
 	}
 }
 
-func (s2 *SessionManager) RemoveIfExist(uid uint64) bool {
-	s2.lock.RLock()
-	defer s2.lock.RUnlock()
-	s := s2.uidMap[str.ToString(uid)]
+func (sm *SessionManager) RemoveIfExist(uid uint64) bool {
+	sm.lock.RLock()
+	defer sm.lock.RUnlock()
+	s := sm.uidMap[str.ToString(uid)]
 	if s == nil {
 		return false
 	}
-	s2.Remove(s)
+	sm.Remove(s)
 	return true
 }
 
-func (s2 *SessionManager) Bind(s ISession) {
+func (sm *SessionManager) Bind(s ISession) {
 	uid := s.UID()
 	if uid == 0 {
 		return
 	}
-	s2.lock.Lock()
-	defer s2.lock.Unlock()
-	if s2.sidMap[s.ID()] != nil {
-		s2.uidMap[str.ToString(uid)] = s
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+	if sm.sidMap[s.ID()] != nil {
+		sm.uidMap[str.ToString(uid)] = s
 	} else {
-		delete(s2.uidMap, str.ToString(uid))
+		delete(sm.uidMap, str.ToString(uid))
 	}
 }
 
-func (s2 *SessionManager) Remove(s ISession) {
-	s2.lock.Lock()
-	defer s2.lock.Unlock()
-	if s2.sidMap[s.ID()] == nil {
+func (sm *SessionManager) Remove(s ISession) {
+	sm.lock.Lock()
+	defer sm.lock.Unlock()
+	if sm.sidMap[s.ID()] == nil {
 		return
 	}
-	delete(s2.sidMap, s.ID())
+	delete(sm.sidMap, s.ID())
 	uid := s.UID()
 	if uid != 0 {
-		if s == s2.uidMap[str.ToString(uid)] {
-			delete(s2.uidMap, str.ToString(s.UID()))
+		if s == sm.uidMap[str.ToString(uid)] {
+			delete(sm.uidMap, str.ToString(s.UID()))
 		}
 	}
 }
 
-func (s2 *SessionManager) FindByUid(uid uint64) ISession {
-	return s2.uidMap[str.ToString(uid)]
+func (sm *SessionManager) FindByUid(uid uint64) ISession {
+	return sm.uidMap[str.ToString(uid)]
 }
 
-func (s2 *SessionManager) All() map[string]ISession {
-	return s2.sidMap
+func (sm *SessionManager) All() map[string]ISession {
+	return sm.sidMap
 }
