@@ -238,14 +238,14 @@ func FindModule(modules []IModule, id string) (module IModule) {
 	return module
 }
 
-type UserAction func(s ISession, p map[string]any) *msg.Msg
+type Action func(s ISession, p map[string]any) *msg.Msg
 type ApiAction func(p map[string]any) *msg.Msg
 
 type callback func(*msg.Msg)
 
 type userActionReq struct {
 	sn     ISession
-	action UserAction
+	action Action
 	pack   *Pack
 	cb     callback
 }
@@ -266,45 +266,59 @@ func (a apiActionReq) call() {
 	a.cb(a.action(body.(map[string]any)))
 }
 
-type GoModule struct {
-	Id          string
-	userActions map[string]UserAction
-	apiActions  map[string]ApiAction
-	// 外部传递吧
-	eventChan      chan any
-	userActReqChan chan *userActionReq
-	apiActReqChan  chan *apiActionReq
-	exitChan       chan any
-	closed         bool
+type Module struct {
+	Id string
+
+	// 执行器
+	Exec func(func())
+
+	// 请求记录
+	actions    map[string]Action
+	apiActions map[string]ApiAction
+
+	taskChan  chan func()
+	eventChan chan any
+	// actReqChan    chan *userActionReq
+	// apiActReqChan chan *apiActionReq
+	exitChan chan any
+	closed   bool
 	// 事件派发器
 	emitter IEventEmitter
 }
 
-func NewGoModule(id string) *GoModule {
-	g := GoModule{Id: id}
-	g.userActions = make(map[string]UserAction)
+func NewModule(id string) *Module {
+	g := Module{Id: id}
+	g.actions = make(map[string]Action)
 	g.apiActions = make(map[string]ApiAction)
 	g.eventChan = make(chan any)
-	g.userActReqChan = make(chan *userActionReq, 0)
-	g.apiActReqChan = make(chan *apiActionReq, 0)
+	g.taskChan = make(chan func())
+	// g.actReqChan = make(chan *userActionReq, 0)
+	// g.apiActReqChan = make(chan *apiActionReq, 0)
 	return &g
 }
 
-func (g *GoModule) OnInit() {
-}
+// OnInit 子类覆盖
+func (g *Module) OnInit() {}
 
-func (g *GoModule) OnStart() {
+func (g *Module) OnStart() {
 	go g.read()
 }
 
-func (g *GoModule) read() {
+func (g *Module) read() {
 	for {
 		// fmt.Println("read...")
 		select {
-		case userActReq := <-g.userActReqChan:
-			userActReq.call()
-		case apiActReq := <-g.apiActReqChan:
-			apiActReq.call()
+		case task := <-g.taskChan:
+			// TestExecutor
+			if g.Exec != nil {
+				g.Exec(task)
+			} else {
+				task()
+			}
+		//case userActReq := <-g.actReqChan:
+		//	userActReq.call()
+		//case apiActReq := <-g.apiActReqChan:
+		//	apiActReq.call()
 		case event := <-g.eventChan:
 			fmt.Println("event:", event)
 		case <-g.exitChan:
@@ -317,16 +331,16 @@ end:
 	g.exitChan <- 1
 }
 
-func (g *GoModule) OnClose() {}
+func (g *Module) OnClose() {}
 
-func (g *GoModule) OnEvent(event any) {
+func (g *Module) OnEvent(event any) {
 	if g.closed {
 		return
 	}
 	g.eventChan <- event
 }
 
-func (g *GoModule) HandleApiAction(route string, pack *Pack, cb callback) {
+func (g *Module) HandleApiAction(route string, pack *Pack, cb callback) {
 	// 模块已关闭
 	if g.closed {
 		cb(msg.NewErr("modules is closed"))
@@ -339,49 +353,51 @@ func (g *GoModule) HandleApiAction(route string, pack *Pack, cb callback) {
 		return
 	}
 	// 转入通道
-	g.apiActReqChan <- &apiActionReq{
+	req := &apiActionReq{
 		action: action,
 		pack:   pack,
 		cb:     cb,
 	}
+	g.taskChan <- func() { req.call() }
 }
 
-func (g *GoModule) HandleUserAction(route string, sn ISession, pack *Pack, cb callback) {
+func (g *Module) HandleUserAction(route string, sn ISession, pack *Pack, cb callback) {
 	// 模块已关闭
 	if g.closed {
 		cb(msg.NewErr("modules is closed"))
 		return
 	}
 	// 处理器
-	action := g.userActions[route]
+	action := g.actions[route]
 	if action == nil {
 		cb(msg.NewErr("action not found"))
 		return
 	}
 	// 转入通道
-	g.userActReqChan <- &userActionReq{
+	req := &userActionReq{
 		sn:     sn,
 		action: action,
 		pack:   pack,
 		cb:     cb,
 	}
+	g.taskChan <- func() { req.call() }
 }
 
-func (g *GoModule) ID(id ...string) string {
+func (g *Module) ID(id ...string) string {
 	if len(id) > 0 {
 		g.Id = id[0]
 	}
 	return g.Id
 }
 
-func (g *GoModule) UserAction(route string, action ...UserAction) UserAction {
+func (g *Module) UserAction(route string, action ...Action) Action {
 	if len(action) > 0 {
-		g.userActions[g.ID()+"."+route] = action[0]
+		g.actions[g.ID()+"."+route] = action[0]
 	}
-	return g.userActions[route]
+	return g.actions[route]
 }
 
-func (g *GoModule) ApiAction(route string, action ...ApiAction) ApiAction {
+func (g *Module) ApiAction(route string, action ...ApiAction) ApiAction {
 	if len(action) > 0 {
 		g.apiActions[g.ID()+"."+route] = action[0]
 	}

@@ -159,7 +159,7 @@ func (c Client) Request(route string, data any) <-chan *msg.Msg {
 			Type:  MsgTypeResponse,
 			Id:    pack.Id,
 			Route: pack.Route,
-			Body:  msg.NewErr("request timeout"),
+			Body:  map[string]any{"code": 400, "msg": "request timeout"},
 		}
 		c.packChan <- timeoutPack
 	})

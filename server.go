@@ -1,6 +1,7 @@
 package net
 
 import (
+	"github.com/elancom/go-util/str"
 	"log"
 	"net"
 )
@@ -18,12 +19,14 @@ func NewSocketServer(context *Context, config *Config) *SocketServer {
 }
 
 func (s *SocketServer) Start() {
-	listen, err := net.Listen("tcp", ":8888")
+	s.context.Init()
+	s.context.Start()
+	listen, err := net.Listen("tcp", ":"+str.ToString(s.config.Port))
 	if err != nil {
 		panic(err)
 	}
 	defer func(listen net.Listener) { _ = listen.Close() }(listen)
-	log.Default().Println("[Socket]running")
+	log.Default().Println("[Socket]running on " + str.ToString(s.config.Port))
 	for {
 		accept, err := listen.Accept()
 		if err != nil {
