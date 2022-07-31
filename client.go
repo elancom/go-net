@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/elancom/go-util/msg"
+	. "github.com/elancom/go-util/lang"
 	"net"
 	"strconv"
 	"sync/atomic"
@@ -15,7 +15,7 @@ type ClientConfig struct{}
 
 type Req struct {
 	id      string
-	out     chan<- *msg.Msg
+	out     chan<- *Msg
 	timeout *time.Timer
 }
 
@@ -116,7 +116,7 @@ func (c Client) handlePack(pack *Pack) {
 			req.timeout.Stop()
 			// fmt.Printf("response:%#v\n", pack)
 			m := pack.Body.(map[string]any)
-			req.out <- msg.NewFrom(m)
+			req.out <- NewFrom(m)
 		}
 	case MsgTypePush:
 		c.dataChan <- pack
@@ -141,8 +141,8 @@ func (c Client) nextId() int64 {
 	return c.reqId
 }
 
-func (c Client) Request(route string, data any) <-chan *msg.Msg {
-	out := make(chan *msg.Msg)
+func (c Client) Request(route string, data any) <-chan *Msg {
+	out := make(chan *Msg)
 	pack := Pack{
 		Type:  MsgTypeRequest,
 		Id:    strconv.FormatInt(c.nextId(), 10),
@@ -151,7 +151,7 @@ func (c Client) Request(route string, data any) <-chan *msg.Msg {
 	}
 	err := c.write(&pack)
 	if err != nil {
-		go func() { out <- msg.NewErr("request error:" + err.Error()) }()
+		go func() { out <- NewErr("request error:" + err.Error()) }()
 		return out
 	}
 	timeout := time.AfterFunc(time.Second*10, func() {

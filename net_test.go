@@ -1,13 +1,23 @@
 package net
 
 import (
-	"fmt"
-	"github.com/elancom/go-util/collection"
+	"bytes"
+	"io"
+	"log"
 	"testing"
 )
 
 func TestName(t *testing.T) {
-	var aa any = make(map[string]any)
-	mp := collection.Params(aa.(map[string]any))
-	fmt.Println(mp)
+	b2 := []byte{1, 2, 3}
+	reader := bytes.NewReader(b2)
+	b := make([]byte, 4)
+
+	bl, err := io.ReadFull(reader, b)
+	if err != nil {
+		b3 := make([]byte, 3)
+		bl2, e := io.ReadFull(reader, b3)
+		log.Println(bl2, e)
+		panic(err)
+	}
+	log.Println(bl)
 }

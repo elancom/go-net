@@ -21,12 +21,12 @@ func NewSocketServer(context *Context, config *Config) *SocketServer {
 func (s *SocketServer) Start() {
 	s.context.Init()
 	s.context.Start()
-	listen, err := net.Listen("tcp", ":"+str.ToString(s.config.Port))
+	listen, err := net.Listen("tcp", ":"+str.String(s.config.Port))
 	if err != nil {
 		panic(err)
 	}
 	defer func(listen net.Listener) { _ = listen.Close() }(listen)
-	log.Default().Println("[Socket]running on " + str.ToString(s.config.Port))
+	log.Default().Println("[Socket]running on " + str.String(s.config.Port))
 	for {
 		accept, err := listen.Accept()
 		if err != nil {
@@ -56,26 +56,29 @@ func (s *SocketServer) accept0(conn net.Conn) {
 		return
 	}
 
+	// TODO 握手超时
+
 	// 会话
 	ss := newSession(conn.(*net.TCPConn))
 	go ss.(ILocalSession).Start()
 	s.context.SessionService.Add(ss)
 
+	// 回话事件(创建)
 	s.context.EventEmitter.Emit(map[string]any{"event": SessionCreatedEvent})
 
 	// 消息接收
 	for {
-		pack, err := decodePack(conn)
-		if err != nil {
+		p, e := decodePack(conn)
+		if e != nil {
 			break
 		}
-		s.context.Dispatcher.Dispatch(ss, pack)
+		s.context.Dispatcher.Dispatch(ss, p)
 	}
 
 	// 会话
 	s.context.SessionService.Remove(ss)
 
-	// 通知
+	// 回话事件(关闭)
 	s.context.EventEmitter.Emit(map[string]any{
 		"event": SessionClosedEvent,
 		"uid":   ss.UID(),

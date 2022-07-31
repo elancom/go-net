@@ -1,7 +1,7 @@
 package net
 
 import (
-	"github.com/elancom/go-util/msg"
+	. "github.com/elancom/go-util/lang"
 	"github.com/gofiber/fiber/v2"
 	"log"
 )
@@ -23,7 +23,7 @@ func NewApiServer() *ApiServer {
 func (a *ApiServer) Init(context *Context) {
 	a.context = context
 	a.app = fiber.New()
-	a.app.Get("/", func(c *fiber.Ctx) error { return c.JSON(msg.NewOk()) })
+	a.app.Get("/", func(c *fiber.Ctx) error { return c.JSON(NewOk()) })
 	a.app.Get("/online", a.online)
 	a.app.Post("/call", a.call)
 }
@@ -53,18 +53,18 @@ func (a *ApiServer) call(c *fiber.Ctx) error {
 	callParam := CallParam{}
 	err := c.BodyParser(&callParam)
 	if err != nil {
-		return c.JSON(msg.NewErr("args error"))
+		return c.JSON(NewErr("args error"))
 	}
 
 	route := callParam.Route
 	data := callParam.Data
 	if route == "" {
-		return c.JSON(msg.NewErr("route error"))
+		return c.JSON(NewErr("route error"))
 	}
 
 	module := a.context.FindModule(GetModuleId(route))
 	if module == nil {
-		return c.JSON(msg.NewErr("route error(.)"))
+		return c.JSON(NewErr("route error(.)"))
 	}
 
 	pack := Pack{
@@ -74,7 +74,7 @@ func (a *ApiServer) call(c *fiber.Ctx) error {
 	}
 	msgChan := make(chan any)
 	go func() {
-		module.HandleApiAction(route, &pack, func(m *msg.Msg) { msgChan <- m })
+		module.HandleApiAction(route, &pack, func(m *Msg) { msgChan <- m })
 	}()
 	return c.JSON(<-msgChan)
 }

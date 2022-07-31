@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/elancom/go-util/msg"
+	. "github.com/elancom/go-util/lang"
 	"github.com/elancom/go-util/queue"
 	"github.com/elancom/go-util/str"
 	"io"
@@ -55,7 +55,7 @@ func decodePack(reader io.Reader) (*Pack, error) {
 	_, err = io.ReadFull(reader, dataBytes)
 	if err != nil {
 		fmt.Println(err)
-		return nil, nil
+		return nil, err
 	}
 	// fmt.Println("receive data:", str(dataBytes))
 
@@ -84,7 +84,7 @@ type LocalChannelService struct {
 	sessionService ISessionService
 }
 
-func (c LocalChannelService) Broadcast(route string, msg any) {
+func (c *LocalChannelService) Broadcast(route string, msg any) {
 	p := Pack{
 		Type:  MsgTypePush,
 		Id:    "",
@@ -96,7 +96,7 @@ func (c LocalChannelService) Broadcast(route string, msg any) {
 	}
 }
 
-func (c LocalChannelService) Send(route string, msg any, uid ...uint64) {
+func (c *LocalChannelService) Send(route string, msg any, uid ...uint64) {
 	p := Pack{
 		Type:  MsgTypePush,
 		Route: route,
@@ -135,11 +135,11 @@ func NewEventEmitter() IEventEmitter {
 	}
 }
 
-func (e EventEmitter) Start() {
+func (e *EventEmitter) Start() {
 	e.eventAddQueue.Start()
 }
 
-func (e EventEmitter) Emit(event any) {
+func (e *EventEmitter) Emit(event any) {
 	e.eventAddQueue.Exec(func() {
 		// 通知本地
 		for _, mod := range e.modules {
@@ -164,7 +164,7 @@ type LocalDispatcher struct {
 func (d *LocalDispatcher) Dispatch(s ISession, pack *Pack) {
 	marshal, _ := json.Marshal(pack)
 	log.Default().Println("[数据]", string(marshal))
-	d.dispatch0(s, pack, func(msg *msg.Msg) {
+	d.dispatch0(s, pack, func(msg *Msg) {
 		p := Pack{
 			Type:  MsgTypeResponse,
 			Id:    pack.Id,
@@ -179,28 +179,28 @@ func (d *LocalDispatcher) dispatch0(session ISession, pack *Pack, cb callback) {
 	// 包ID
 	id := strings.Trim(pack.Id, "")
 	if len(id) == 0 {
-		cb(msg.NewErr("Id error"))
+		cb(NewErr("Id error"))
 		return
 	}
 
 	// 路由
 	route := pack.Route
 	if len(route) == 0 {
-		cb(msg.NewErr("route error"))
+		cb(NewErr("route error"))
 		return
 	}
 
 	// 提取模块名称
 	mid := GetModuleId(route)
 	if str.IsBlank(mid) {
-		cb(msg.NewErr("route error(.)"))
+		cb(NewErr("route error(.)"))
 		return
 	}
 
 	// 模块
 	mod := d.FindModule(mid)
 	if mod == nil {
-		cb(msg.NewErr("no find route(" + route + ")"))
+		cb(NewErr("no find route(" + route + ")"))
 		return
 	}
 
@@ -238,10 +238,10 @@ func FindModule(modules []IModule, id string) (module IModule) {
 	return module
 }
 
-type Action func(s ISession, p map[string]any) *msg.Msg
-type ApiAction func(p map[string]any) *msg.Msg
+type Action func(s ISession, p map[string]any) *Msg
+type ApiAction func(p map[string]any) *Msg
 
-type callback func(*msg.Msg)
+type callback func(*Msg)
 
 type userActionReq struct {
 	sn     ISession
@@ -343,13 +343,13 @@ func (g *Module) OnEvent(event any) {
 func (g *Module) HandleApiAction(route string, pack *Pack, cb callback) {
 	// 模块已关闭
 	if g.closed {
-		cb(msg.NewErr("modules is closed"))
+		cb(NewErr("modules is closed"))
 		return
 	}
 	// 处理器
 	action := g.apiActions[route]
 	if action == nil {
-		cb(msg.NewErr("action not found"))
+		cb(NewErr("action not found"))
 		return
 	}
 	// 转入通道
@@ -364,13 +364,13 @@ func (g *Module) HandleApiAction(route string, pack *Pack, cb callback) {
 func (g *Module) HandleUserAction(route string, sn ISession, pack *Pack, cb callback) {
 	// 模块已关闭
 	if g.closed {
-		cb(msg.NewErr("modules is closed"))
+		cb(NewErr("module was closed"))
 		return
 	}
 	// 处理器
 	action := g.actions[route]
 	if action == nil {
-		cb(msg.NewErr("action not found"))
+		cb(NewErr("action not found"))
 		return
 	}
 	// 转入通道

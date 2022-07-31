@@ -3,7 +3,7 @@ package net
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/elancom/go-util/msg"
+	. "github.com/elancom/go-util/lang"
 	"testing"
 )
 
@@ -35,8 +35,8 @@ func (l *LoginModule) OnInit() {
 	l.UserAction("login", l.login)
 }
 
-func (l *LoginModule) login(s ISession, p map[string]any) *msg.Msg {
+func (l *LoginModule) login(s ISession, p map[string]any) *Msg {
 	marshal, _ := json.Marshal(p)
 	fmt.Println("p:", string(marshal))
-	return msg.NewOk()
+	return NewOk()
 }

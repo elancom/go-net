@@ -37,11 +37,11 @@ type LocalSession struct {
 	uid        uint64
 	ip         string
 	ctime      time.Time
-	logged     bool
+	logged     bool // 登录标记
 	readChan   chan any
 	writeChan  chan *Pack // todo -> []byte
 	closeChan  chan any
-	conn       *net.TCPConn
+	conn       *net.TCPConn // todo 抽象
 	closed     bool
 	bindNotify func()
 }
@@ -50,7 +50,7 @@ func newSession(conn *net.TCPConn) ISession {
 	s := LocalSession{}
 	s.id = strconv.FormatInt(time.Now().UnixNano(), 10)
 	s.ip = conn.RemoteAddr().Network()
-	s.ctime = time.Time{}
+	s.ctime = time.Now()
 	s.readChan = make(chan any, 32)
 	s.writeChan = make(chan *Pack, 32)
 	s.closeChan = make(chan any)
@@ -164,7 +164,7 @@ func (sm *SessionManager) Add(s ISession) {
 func (sm *SessionManager) RemoveIfExist(uid uint64) bool {
 	sm.lock.RLock()
 	defer sm.lock.RUnlock()
-	s := sm.uidMap[str.ToString(uid)]
+	s := sm.uidMap[str.String(uid)]
 	if s == nil {
 		return false
 	}
@@ -180,9 +180,9 @@ func (sm *SessionManager) Bind(s ISession) {
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
 	if sm.sidMap[s.ID()] != nil {
-		sm.uidMap[str.ToString(uid)] = s
+		sm.uidMap[str.String(uid)] = s
 	} else {
-		delete(sm.uidMap, str.ToString(uid))
+		delete(sm.uidMap, str.String(uid))
 	}
 }
 
@@ -195,14 +195,14 @@ func (sm *SessionManager) Remove(s ISession) {
 	delete(sm.sidMap, s.ID())
 	uid := s.UID()
 	if uid != 0 {
-		if s == sm.uidMap[str.ToString(uid)] {
-			delete(sm.uidMap, str.ToString(s.UID()))
+		if s == sm.uidMap[str.String(uid)] {
+			delete(sm.uidMap, str.String(s.UID()))
 		}
 	}
 }
 
 func (sm *SessionManager) FindByUid(uid uint64) ISession {
-	return sm.uidMap[str.ToString(uid)]
+	return sm.uidMap[str.String(uid)]
 }
 
 func (sm *SessionManager) All() map[string]ISession {
