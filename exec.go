@@ -30,7 +30,7 @@ func NewExecutorWithSize(size int) *executor {
 	}
 }
 
-func (e *executor) Exec(f func()) {
+func (e *executor) Exec(fn func()) {
 	if !e.ready {
 		e.lock.Lock()
 		go func() {
@@ -53,15 +53,15 @@ func (e *executor) Exec(f func()) {
 	e.lock.RLock()
 	defer e.lock.RUnlock()
 	if !e.closed {
-		e.q <- f
+		e.q <- fn
 	}
 }
 
-func (e *executor) After(d time.Duration, f func()) *time.Timer {
-	return time.AfterFunc(d, func() { e.Exec(f) })
+func (e *executor) After(d time.Duration, fn func()) *time.Timer {
+	return time.AfterFunc(d, func() { e.Exec(fn) })
 }
 
-func (e *executor) Ticker(d time.Duration, f func(*time.Ticker, *time.Time)) IStopper {
+func (e *executor) Ticker(d time.Duration, fn func(*time.Ticker, *time.Time)) IStopper {
 	ticker := time.NewTicker(d)
 	stop := make(chan any)
 	stopper := NewStopper(stop)
@@ -69,7 +69,7 @@ func (e *executor) Ticker(d time.Duration, f func(*time.Ticker, *time.Time)) ISt
 		for {
 			select {
 			case t := <-ticker.C:
-				e.Exec(func() { f(ticker, &t) })
+				e.Exec(func() { fn(ticker, &t) })
 			case <-stop:
 				e.Exec(func() {
 					e.tickers.Remove(element)

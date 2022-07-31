@@ -19,8 +19,6 @@ func NewSocketServer(context *Context, config *Config) *SocketServer {
 }
 
 func (s *SocketServer) Start() {
-	s.context.Init()
-	s.context.Start()
 	listen, err := net.Listen("tcp", ":"+str.String(s.config.Port))
 	if err != nil {
 		panic(err)

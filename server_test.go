@@ -8,14 +8,15 @@ import (
 )
 
 func TestName0(t *testing.T) {
-	// wrap to app
-	// a:new
-	// a:reg(login)
-	// a:start("tcp", ":8888")
 	context := NewContext()
 	context.Reg(NewLoginModule())
+	context.Init()
+	// todo 把socket集成到context中, context.Socket = NewSocket...
+	context.Start()
 	server := NewSocketServer(context, &Config{Port: 8888})
 	server.Start()
+
+	// wrapper -> game server
 }
 
 var LoginExecutor = NewExecutor()
@@ -25,18 +26,16 @@ type LoginModule struct {
 }
 
 func NewLoginModule() IModule {
-	return &LoginModule{
-		Module: NewModule("login"),
-	}
+	return &LoginModule{Module: NewModule("login")}
 }
 
-func (l *LoginModule) OnInit() {
-	l.Exec = LoginExecutor.Exec
-	l.UserAction("login", l.login)
+func (mod *LoginModule) OnInit() {
+	mod.Exec = LoginExecutor.Exec
+	mod.UserAction("login", mod.login)
 }
 
-func (l *LoginModule) login(s ISession, p map[string]any) *Msg {
-	marshal, _ := json.Marshal(p)
-	fmt.Println("p:", string(marshal))
+func (mod *LoginModule) login(s ISession, d map[string]any) *Msg {
+	marshal, _ := json.Marshal(d)
+	fmt.Println("d:", string(marshal))
 	return NewOk()
 }
