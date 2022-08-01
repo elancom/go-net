@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	. "github.com/elancom/go-util/lang"
+	"github.com/elancom/go-util/str"
+	"log"
 	"net"
-	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -37,21 +39,25 @@ func (i *IOCat) cat() {
 }
 
 type Client struct {
-	conn      net.Conn
-	reqId     int64
-	reqs      map[string]*Req
-	packChan  chan *Pack // 响应包通道
-	closeChan chan any   // 关闭通道
-	dataChan  chan any   // 业务推送通道
-	echoTime  *time.Time
+	conn  net.Conn
+	reqId int64
+	//reqs       map[string]*Req
+	reqs       *sync.Map
+	reqMap     *sync.Map
+	taskChan   chan any // 响应队列
+	onDataChan chan any // 推送队列
+	closeChan  chan any // 关闭通道
+	echoTime   *time.Time
 }
 
 func NewClient() *Client {
 	c := Client{}
-	c.reqs = make(map[string]*Req)
-	c.packChan = make(chan *Pack)
-	c.closeChan = make(chan any)
-	c.dataChan = make(chan any)
+	//c.reqs = make(map[string]*Req)
+	c.reqs = new(sync.Map)
+	//c.reqMap = new(sync.Map)
+	c.taskChan = make(chan any, 16)
+	c.closeChan = make(chan any, 16)
+	c.onDataChan = make(chan any, 16)
 	return &c
 }
 
@@ -76,7 +82,6 @@ func (c *Client) Connect() error {
 
 func (c *Client) ready() {
 	// read data
-	ioPackChan := make(chan *Pack)
 	ioClosedChan := make(chan int)
 	go func() {
 		for {
@@ -84,7 +89,7 @@ func (c *Client) ready() {
 			if err != nil {
 				break
 			}
-			ioPackChan <- pack
+			c.taskChan <- pack
 		}
 		ioClosedChan <- 1
 	}()
@@ -92,10 +97,18 @@ func (c *Client) ready() {
 loop:
 	for {
 		select {
-		case pack := <-c.packChan:
-			c.handlePack(pack)
-		case pack := <-ioPackChan:
-			c.handlePack(pack)
+		case t := <-c.taskChan:
+			switch t.(type) {
+			case *Pack: // 数据包(响应包、推送包)
+				c.handlePack(t.(*Pack))
+			case *timeout: // 超时包
+				tout := t.(*timeout)
+				andDelete, loaded := c.reqs.LoadAndDelete(tout.Id)
+				if loaded {
+					req := andDelete.(*Req)
+					req.out <- NewErr("request timeout")
+				}
+			}
 		case <-ioClosedChan:
 			break loop
 		}
@@ -103,32 +116,30 @@ loop:
 	c.closeChan <- 1
 }
 
-func (c Client) handlePack(pack *Pack) {
-	if pack == nil {
-		fmt.Println("非法数据包")
-		return
-	}
+func (c *Client) handlePack(pack *Pack) {
 	switch pack.Type {
 	case MsgTypeResponse:
-		req := c.reqs[pack.Id]
-		if req != nil {
-			delete(c.reqs, pack.Id)
+		andDelete, loaded := c.reqs.LoadAndDelete(pack.Id)
+		if loaded {
+			req := andDelete.(*Req)
 			req.timeout.Stop()
-			// fmt.Printf("response:%#v\n", pack)
 			m := pack.Body.(map[string]any)
 			req.out <- NewFrom(m)
+		} else {
+			log.Println("not found req handler:" + pack.Id)
 		}
 	case MsgTypePush:
-		c.dataChan <- pack
+		c.onDataChan <- pack
 	case MsgTypeHeartbeat:
+		// 忽略
 	}
 }
 
-func (c Client) OnData() <-chan any {
-	return c.dataChan
+func (c *Client) OnData() <-chan any {
+	return c.onDataChan
 }
 
-func (c Client) OnClose() <-chan any {
+func (c *Client) OnClose() <-chan any {
 	return c.closeChan
 }
 
@@ -136,38 +147,39 @@ func (c *Client) Read() (*Pack, error) {
 	return decodePack(c.conn)
 }
 
-func (c Client) nextId() int64 {
+func (c *Client) nextId() int64 {
 	atomic.AddInt64(&c.reqId, 1)
 	return c.reqId
 }
 
-func (c Client) Request(route string, data any) <-chan *Msg {
+func (c *Client) Request(route string, data any) <-chan *Msg {
 	out := make(chan *Msg)
 	pack := Pack{
 		Type:  MsgTypeRequest,
-		Id:    strconv.FormatInt(c.nextId(), 10),
+		Id:    str.String(c.nextId()),
 		Route: route,
 		Body:  data,
 	}
+
+	// 请求队列
+	c.reqs.Store(pack.Id, &Req{
+		id:      pack.Id,
+		out:     out,
+		timeout: time.AfterFunc(time.Second*10, func() { c.taskChan <- &timeout{Id: pack.Id} }),
+	})
+
+	// 发送
 	err := c.write(&pack)
 	if err != nil {
-		go func() { out <- NewErr("request error:" + err.Error()) }()
+		go func() {
+			out <- NewErr("request error:" + err.Error())
+		}()
 		return out
 	}
-	timeout := time.AfterFunc(time.Second*10, func() {
-		timeoutPack := &Pack{
-			Type:  MsgTypeResponse,
-			Id:    pack.Id,
-			Route: pack.Route,
-			Body:  map[string]any{"code": 400, "msg": "request timeout"},
-		}
-		c.packChan <- timeoutPack
-	})
-	c.reqs[pack.Id] = &Req{id: pack.Id, out: out, timeout: timeout}
 	return out
 }
 
-func (c Client) write(pack *Pack) error {
+func (c *Client) write(pack *Pack) error {
 	_, err := c.conn.Write(encodePack(pack))
 	if err != nil {
 		return err

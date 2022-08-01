@@ -8,15 +8,15 @@ type ApiAction func(p map[string]any) *Msg
 type callback func(msg *Msg)
 
 type userActionReq struct {
-	sn     ISession
-	action Action
-	pack   *Pack
-	cb     callback
+	session ISession
+	action  Action
+	pack    *Pack
+	cb      callback
 }
 
 func (a userActionReq) call() {
 	body := a.pack.Body
-	a.cb(a.action(a.sn, body.(map[string]any)))
+	a.cb(a.action(a.session, body.(map[string]any)))
 }
 
 type apiActionReq struct {

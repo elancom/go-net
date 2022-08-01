@@ -102,7 +102,7 @@ func (s *LocalSession) Start() {
 		case pack := <-s.writeChan:
 			_, err := s.conn.Write(encodePack(pack))
 			if err != nil {
-				log.Default().Println(err)
+				log.Println(err)
 				break
 			}
 		case <-s.closeChan:

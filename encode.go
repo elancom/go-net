@@ -25,6 +25,10 @@ type Pack struct {
 	Body  any
 }
 
+type timeout struct {
+	Id string
+}
+
 func encodePack(pack *Pack) []byte {
 	dataBytes, _ := json.Marshal(pack)
 	headBytes := []byte{0, 0, 0, 0}

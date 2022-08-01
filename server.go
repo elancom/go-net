@@ -24,11 +24,11 @@ func (s *SocketServer) Start() {
 		panic(err)
 	}
 	defer func(listen net.Listener) { _ = listen.Close() }(listen)
-	log.Default().Println("[Socket]running on " + str.String(s.config.Port))
+	log.Println("[Socket]running on " + str.String(s.config.Port))
 	for {
 		accept, err := listen.Accept()
 		if err != nil {
-			log.Default().Println(err)
+			log.Println(err)
 		}
 		s.accept(accept)
 	}
@@ -50,7 +50,7 @@ func (s *SocketServer) accept0(conn net.Conn) {
 	}
 	_, err := conn.Write(encodePack(&pack))
 	if err != nil {
-		log.Default().Println(err)
+		log.Println(err)
 		return
 	}
 

@@ -5,18 +5,21 @@ import (
 	"fmt"
 	. "github.com/elancom/go-util/lang"
 	"testing"
+	"time"
 )
 
-func TestName0(t *testing.T) {
-	context := NewContext()
-	context.Reg(NewLoginModule())
-	context.Init()
-	// todo 把socket集成到context中, context.Socket = NewSocket...
-	context.Start()
-	server := NewSocketServer(context, &Config{Port: 8888})
-	server.Start()
-
-	// wrapper -> game server
+func TestServer(t *testing.T) {
+	go func() {
+		context := NewContext()
+		context.Reg(NewLoginModule())
+		context.Init()
+		// todo 把socket集成到context中, context.Socket = NewSocket...
+		context.Start()
+		server := NewSocketServer(context, &Config{Port: 8888})
+		server.Start()
+		// wrapper -> game server
+	}()
+	time.Sleep(time.Hour)
 }
 
 var LoginExecutor = NewExecutor()

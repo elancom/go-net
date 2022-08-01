@@ -29,7 +29,7 @@ func (a *ApiServer) Init(context *Context) {
 }
 
 func (a *ApiServer) Start() {
-	log.Default().Println("[API]running")
+	log.Println("[API]running")
 	log.Fatal(a.app.Listen(":3456"))
 }
 

@@ -43,8 +43,12 @@ type Module struct {
 	actions    map[string]Action
 	apiActions map[string]ApiAction
 
-	taskChan  chan func()
+	// 模块任务处理队列
+	taskChan chan any
+
+	// 事件处理
 	eventChan chan any
+
 	// actReqChan    chan *userActionReq
 	// apiActReqChan chan *apiActionReq
 	exitChan chan any
@@ -57,10 +61,7 @@ func NewModule(id string) *Module {
 	g := Module{Id: id}
 	g.actions = make(map[string]Action)
 	g.apiActions = make(map[string]ApiAction)
-	g.eventChan = make(chan any)
-	g.taskChan = make(chan func())
-	// g.actReqChan = make(chan *userActionReq, 0)
-	// g.apiActReqChan = make(chan *apiActionReq, 0)
+	g.taskChan = make(chan any, 16)
 	return &g
 }
 
@@ -68,26 +69,23 @@ func NewModule(id string) *Module {
 func (g *Module) OnInit() {}
 
 func (g *Module) OnStart() {
-	go g.read()
+	go g.readTask()
 }
 
-func (g *Module) read() {
+func (g *Module) readTask() {
 	for {
-		// fmt.Println("read...")
 		select {
-		case task := <-g.taskChan:
-			// TestExecutor
-			if g.Exec != nil {
-				g.Exec(task)
-			} else {
-				task()
+		case t := <-g.taskChan: // 执行任务
+			// 函数任务
+			if fn, ok := t.(func()); ok {
+				if g.Exec != nil {
+					g.Exec(fn)
+				} else {
+					fn()
+				}
+			} else { // 事件
+				fmt.Println("event:", t)
 			}
-		//case userActReq := <-g.actReqChan:
-		//	userActReq.call()
-		//case apiActReq := <-g.apiActReqChan:
-		//	apiActReq.call()
-		case event := <-g.eventChan:
-			fmt.Println("event:", event)
 		case <-g.exitChan:
 			goto end
 		}
@@ -119,13 +117,13 @@ func (g *Module) HandleApiAction(route string, pack *Pack, cb callback) {
 		cb(NewErr("action not found"))
 		return
 	}
-	// 转入通道
+	// 放到任务队列
 	req := &apiActionReq{
 		action: action,
 		pack:   pack,
 		cb:     cb,
 	}
-	g.taskChan <- func() { req.call() }
+	g.push(func() { req.call() })
 }
 
 func (g *Module) HandleUserAction(route string, sn ISession, pack *Pack, cb callback) {
@@ -140,14 +138,22 @@ func (g *Module) HandleUserAction(route string, sn ISession, pack *Pack, cb call
 		cb(NewErr("action not found"))
 		return
 	}
-	// 转入通道
+	// 放到任务队列
 	req := &userActionReq{
-		sn:     sn,
-		action: action,
-		pack:   pack,
-		cb:     cb,
+		session: sn,
+		action:  action,
+		pack:    pack,
+		cb:      cb,
 	}
-	g.taskChan <- func() { req.call() }
+	g.push(func() { req.call() })
+}
+
+func (g *Module) push(t any) {
+	g.taskChan <- t
+	size := len(g.taskChan)
+	if size > 0 {
+		fmt.Println("taskChan size:", size)
+	}
 }
 
 func (g *Module) ID(id ...string) string {

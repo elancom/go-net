@@ -22,7 +22,7 @@ type LocalDispatcher struct {
 
 func (d *LocalDispatcher) Dispatch(s ISession, pack *Pack) {
 	marshal, _ := json.Marshal(pack)
-	log.Default().Println("[数据]", string(marshal))
+	log.Println("[数据]", string(marshal))
 	d.dispatch(s, pack, func(msg *Msg) {
 		p := Pack{
 			Type:  MsgTypeResponse,
@@ -30,7 +30,10 @@ func (d *LocalDispatcher) Dispatch(s ISession, pack *Pack) {
 			Route: pack.Route,
 			Body:  msg,
 		}
-		s.Send(&p)
+		go func() {
+			s.Send(&p)
+			log.Println("已发送")
+		}()
 	})
 }
 
