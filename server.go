@@ -26,9 +26,9 @@ func (s *SocketServer) Start() {
 	defer func(listen net.Listener) { _ = listen.Close() }(listen)
 	log.Println("[Socket]running on " + str.String(s.config.Port))
 	for {
-		accept, err := listen.Accept()
-		if err != nil {
-			log.Println(err)
+		accept, e := listen.Accept()
+		if e != nil {
+			log.Println(e)
 		}
 		s.accept(accept)
 	}
